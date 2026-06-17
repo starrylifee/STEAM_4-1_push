@@ -521,7 +521,7 @@ class ObstacleDodge extends BaseGame {
   constructor() {
     super(
       "장애물 피하기",
-      "밀기로 자동차를 움직여 장애물을 피하고, 마지막에는 주차장에 정확히 주차합니다. 레벨2는 장애물이 더 많습니다.",
+      "큰 손가락으로 장난감 차를 직접 밀어 다가오는 차를 피하고, 마지막에는 주차칸 안에 밀어 넣습니다.",
       "장애물 피하기.pdf",
     );
     this.reset();
@@ -536,8 +536,9 @@ class ObstacleDodge extends BaseGame {
     this.carName = "기본차";
     this.carColor = "#3be2c0";
     this.distance = 0;
-    this.car = { x: 126, y: 326, w: 58, h: 34 };
-    this.targetY = this.car.y;
+    this.car = { x: 150, y: 326, w: 64, h: 38, vx: 0, vy: 0 };
+    this.finger = { x: 72, y: 326, tx: 72, ty: 326, vx: 0, vy: 0, contact: false };
+    this.parkHold = 0;
     this.obstacles = [];
     this.coinItems = [];
     this.spawn = 0.4;
@@ -548,9 +549,12 @@ class ObstacleDodge extends BaseGame {
     this.state = "playing";
     this.level = level;
     this.distance = 0;
-    this.car.x = 126;
+    this.car.x = 150;
     this.car.y = 326;
-    this.targetY = this.car.y;
+    this.car.vx = 0;
+    this.car.vy = 0;
+    this.finger = { x: 72, y: 326, tx: 72, ty: 326, vx: 0, vy: 0, contact: false };
+    this.parkHold = 0;
     this.obstacles = [];
     this.coinItems = [];
     this.spawn = 0.3;
@@ -584,23 +588,16 @@ class ObstacleDodge extends BaseGame {
     this.time += dt;
     if (this.state !== "playing" && this.state !== "parking") return;
 
-    const up = keys.has("arrowup") || keys.has("w");
-    const down = keys.has("arrowdown") || keys.has("s");
-    const left = keys.has("arrowleft") || keys.has("a");
-    const right = keys.has("arrowright") || keys.has("d");
-
-    if (pointer.down) this.targetY = clamp(pointer.y, 190, 438);
-    if (up) this.targetY -= 330 * dt;
-    if (down) this.targetY += 330 * dt;
-    this.targetY = clamp(this.targetY, 190, 438);
-    this.car.y += (this.targetY - this.car.y) * Math.min(1, dt * 9);
-    if (left) this.car.x -= 170 * dt;
-    if (right) this.car.x += 170 * dt;
-    this.car.x = clamp(this.car.x, 84, 820);
+    this.updateFingerAndToyCar(dt);
 
     if (this.state === "parking") {
       const parking = { x: 748, y: 254, w: 128, h: 124 };
-      if (rectHit(this.carBox(), parking) && (keys.has(" ") || keys.has("spacebar"))) this.finishLevel();
+      if (rectHit(this.carBox(), parking) && Math.hypot(this.car.vx, this.car.vy) < 90) {
+        this.parkHold += dt;
+        if (this.parkHold >= 0.85) this.finishLevel();
+      } else {
+        this.parkHold = 0;
+      }
       return;
     }
 
@@ -614,8 +611,9 @@ class ObstacleDodge extends BaseGame {
         this.obstacles.push({
           x: W + rand(20, 180),
           y: rand(190, 438),
-          w: rand(28, 52),
-          h: rand(42, 76),
+          w: rand(60, 86),
+          h: rand(34, 48),
+          color: i % 2 === 0 ? "#ff756b" : "#b9a6ff",
         });
       }
       this.spawn = this.level === 1 ? rand(0.7, 1.1) : rand(0.45, 0.8);
@@ -643,7 +641,69 @@ class ObstacleDodge extends BaseGame {
     if (this.distance >= 680) {
       this.state = "parking";
       this.car.x = 640;
-      this.targetY = 318;
+      this.car.y = 318;
+      this.car.vx = 0;
+      this.car.vy = 0;
+      this.finger.tx = 578;
+      this.finger.ty = 318;
+      this.parkHold = 0;
+    }
+  }
+
+  updateFingerAndToyCar(dt) {
+    const up = keys.has("arrowup") || keys.has("w");
+    const down = keys.has("arrowdown") || keys.has("s");
+    const left = keys.has("arrowleft") || keys.has("a");
+    const right = keys.has("arrowright") || keys.has("d");
+    if (pointer.down) {
+      this.finger.tx = pointer.x;
+      this.finger.ty = pointer.y;
+    }
+    if (left) this.finger.tx -= 360 * dt;
+    if (right) this.finger.tx += 360 * dt;
+    if (up) this.finger.ty -= 360 * dt;
+    if (down) this.finger.ty += 360 * dt;
+    this.finger.tx = clamp(this.finger.tx, 42, 884);
+    this.finger.ty = clamp(this.finger.ty, 176, 452);
+
+    const oldX = this.finger.x;
+    const oldY = this.finger.y;
+    const follow = Math.min(1, dt * 14);
+    this.finger.x += (this.finger.tx - this.finger.x) * follow;
+    this.finger.y += (this.finger.ty - this.finger.y) * follow;
+    this.finger.vx = (this.finger.x - oldX) / Math.max(dt, 0.001);
+    this.finger.vy = (this.finger.y - oldY) / Math.max(dt, 0.001);
+
+    const dx = this.car.x - this.finger.x;
+    const dy = this.car.y - this.finger.y;
+    const d = Math.hypot(dx, dy) || 1;
+    const pushRadius = 70;
+    this.finger.contact = d < pushRadius;
+    if (this.finger.contact) {
+      const overlap = pushRadius - d;
+      this.car.vx += (dx / d) * overlap * 32 * dt + this.finger.vx * 0.16;
+      this.car.vy += (dy / d) * overlap * 32 * dt + this.finger.vy * 0.16;
+    }
+
+    this.car.vx *= 0.91;
+    this.car.vy *= 0.91;
+    this.car.x += this.car.vx * dt;
+    this.car.y += this.car.vy * dt;
+    if (this.car.x < 92) {
+      this.car.x = 92;
+      this.car.vx *= -0.35;
+    }
+    if (this.car.x > 832) {
+      this.car.x = 832;
+      this.car.vx *= -0.35;
+    }
+    if (this.car.y < 190) {
+      this.car.y = 190;
+      this.car.vy *= -0.35;
+    }
+    if (this.car.y > 438) {
+      this.car.y = 438;
+      this.car.vy *= -0.35;
     }
   }
 
@@ -655,13 +715,17 @@ class ObstacleDodge extends BaseGame {
     if (super.onPointerDown(pos)) return true;
     if (this.state === "playing" || this.state === "parking") {
       pointer.down = true;
-      this.targetY = clamp(pos.y, 190, 438);
+      this.finger.tx = clamp(pos.x, 42, 884);
+      this.finger.ty = clamp(pos.y, 176, 452);
     }
     return true;
   }
 
   onPointerMove(pos) {
-    if (pointer.down && (this.state === "playing" || this.state === "parking")) this.targetY = clamp(pos.y, 190, 438);
+    if (this.state === "playing" || this.state === "parking") {
+      this.finger.tx = clamp(pos.x, 42, 884);
+      this.finger.ty = clamp(pos.y, 176, 452);
+    }
   }
 
   onKeyDown(key) {
@@ -685,6 +749,38 @@ class ObstacleDodge extends BaseGame {
     c.arc(-20, 20, 8, 0, Math.PI * 2);
     c.arc(20, 20, 8, 0, Math.PI * 2);
     c.fill();
+    c.restore();
+  }
+
+  drawFinger(c) {
+    c.save();
+    c.lineCap = "round";
+    c.lineJoin = "round";
+    c.strokeStyle = "#e8b985";
+    c.lineWidth = 38;
+    c.beginPath();
+    c.moveTo(-40, this.finger.y + 36);
+    c.quadraticCurveTo(this.finger.x - 92, this.finger.y + 18, this.finger.x - 16, this.finger.y + 4);
+    c.stroke();
+    c.fillStyle = "#f0c393";
+    c.beginPath();
+    c.ellipse(this.finger.x, this.finger.y, 34, 26, -0.25, 0, Math.PI * 2);
+    c.fill();
+    c.strokeStyle = "rgba(112,70,42,.42)";
+    c.lineWidth = 3;
+    c.beginPath();
+    c.arc(this.finger.x + 4, this.finger.y - 2, 17, -0.9, 1.4);
+    c.stroke();
+    if (this.finger.contact) {
+      c.strokeStyle = "#ffd166";
+      c.lineWidth = 5;
+      c.beginPath();
+      c.arc(this.car.x, this.car.y, 46, 0, Math.PI * 2);
+      c.stroke();
+      c.fillStyle = "#ffd166";
+      c.font = "900 16px system-ui, sans-serif";
+      c.fillText("미는 중", this.car.x - 30, this.car.y - 42);
+    }
     c.restore();
   }
 
@@ -714,11 +810,16 @@ class ObstacleDodge extends BaseGame {
     c.strokeRect(78, 118, 800, 9);
 
     for (const obstacle of this.obstacles) {
-      c.fillStyle = "#ff756b";
-      roundRect(c, obstacle.x, obstacle.y, obstacle.w, obstacle.h, 6);
+      c.fillStyle = obstacle.color;
+      roundRect(c, obstacle.x, obstacle.y, obstacle.w, obstacle.h, 8);
       c.fill();
-      c.fillStyle = "#ffd166";
-      c.fillRect(obstacle.x + 6, obstacle.y + 8, obstacle.w - 12, 8);
+      c.fillStyle = "#101114";
+      c.fillRect(obstacle.x + 10, obstacle.y + 8, obstacle.w - 20, 12);
+      c.fillStyle = "#f7efe1";
+      c.beginPath();
+      c.arc(obstacle.x + 16, obstacle.y + obstacle.h + 2, 7, 0, Math.PI * 2);
+      c.arc(obstacle.x + obstacle.w - 16, obstacle.y + obstacle.h + 2, 7, 0, Math.PI * 2);
+      c.fill();
     }
     for (const coin of this.coinItems) {
       c.fillStyle = "#ffd166";
@@ -737,20 +838,21 @@ class ObstacleDodge extends BaseGame {
       c.strokeStyle = "#3be2c0";
       c.lineWidth = 3;
       c.stroke();
-      drawCapsule(c, 670, 214, "주차장 안에서 Space", "#3be2c0");
+      drawCapsule(c, 654, 214, `주차칸 안에서 멈추기 ${Math.floor(this.parkHold * 100)}%`, "#3be2c0");
     }
 
+    this.drawFinger(c);
     this.drawCar(c);
-    drawCapsule(c, 22, 20, "밀기: 드래그 또는 방향키로 차를 움직이기", "#ffd166");
+    drawCapsule(c, 22, 20, "큰 손가락을 움직여 장난감 차를 밀기", "#ffd166");
     drawGuidePanel(c, "현재 할 일", [
-      this.state === "parking" ? "주차장 안으로 차를 넣기" : "장애물을 피하며 결승선까지 이동",
-      this.state === "parking" ? "차가 주차칸 안에 들어가면 Space" : "코인을 먹으면 자동차를 살 수 있음",
-      "부딪히면 실패 화면으로 이동",
+      this.state === "parking" ? "손가락으로 차를 주차칸 안에 밀기" : "손가락으로 차를 밀어 다가오는 차 피하기",
+      this.state === "parking" ? "칸 안에서 잠깐 멈추면 통과" : "마우스/터치 또는 방향키가 손가락을 움직임",
+      "차끼리 부딪히면 실패",
     ], 600, 20, 330, "#ffd166");
     drawSmallText(c, [
-      "장애물에 치이면 다시 시작됩니다.",
-      "마지막에는 주차장에 주차해야 통과합니다.",
-      "레벨2는 장애물이 더 많이 나옵니다.",
+      "차가 스스로 움직이는 것이 아니라 손가락에 밀려 움직입니다.",
+      "너무 세게 밀면 관성 때문에 미끄러집니다.",
+      "레벨2는 다가오는 차가 더 많이 나옵니다.",
     ], 22, 64);
 
     if (this.state === "select") {
