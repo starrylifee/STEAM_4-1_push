@@ -545,6 +545,47 @@ class ObstacleDodge extends BaseGame {
     this.coinSpawn = 1.1;
   }
 
+  levelSettings() {
+    if (this.level === 1) {
+      return {
+        roadSpeed: 170,
+        distanceRate: 62,
+        finishDistance: 520,
+        obstacleCount: 1,
+        spawnMin: 1.55,
+        spawnMax: 2.2,
+        obstacleW: [54, 70],
+        obstacleH: [30, 40],
+        coinMin: 1.8,
+        coinMax: 2.5,
+        fingerSpeed: 300,
+        fingerFollow: 10,
+        pushForce: 21,
+        fingerInfluence: 0.1,
+        friction: 0.84,
+        hitPadding: 10,
+      };
+    }
+    return {
+      roadSpeed: 245,
+      distanceRate: 82,
+      finishDistance: 640,
+      obstacleCount: 2,
+      spawnMin: 0.95,
+      spawnMax: 1.35,
+      obstacleW: [58, 80],
+      obstacleH: [32, 46],
+      coinMin: 1.35,
+      coinMax: 2,
+      fingerSpeed: 330,
+      fingerFollow: 12,
+      pushForce: 26,
+      fingerInfluence: 0.13,
+      friction: 0.87,
+      hitPadding: 7,
+    };
+  }
+
   startLevel(level = this.level) {
     this.state = "playing";
     this.level = level;
@@ -557,8 +598,8 @@ class ObstacleDodge extends BaseGame {
     this.parkHold = 0;
     this.obstacles = [];
     this.coinItems = [];
-    this.spawn = 0.3;
-    this.coinSpawn = 0.7;
+    this.spawn = this.level === 1 ? 1.2 : 0.75;
+    this.coinSpawn = this.level === 1 ? 1.4 : 0.9;
   }
 
   chooseGender(gender) {
@@ -601,33 +642,40 @@ class ObstacleDodge extends BaseGame {
       return;
     }
 
-    const roadSpeed = 285 + this.level * 75;
-    this.distance += dt * 95;
+    const settings = this.levelSettings();
+    const roadSpeed = settings.roadSpeed;
+    this.distance += dt * settings.distanceRate;
     this.spawn -= dt;
     this.coinSpawn -= dt;
     if (this.spawn <= 0) {
-      const count = this.level === 1 ? 1 : 2;
+      const count = settings.obstacleCount;
       for (let i = 0; i < count; i += 1) {
         this.obstacles.push({
-          x: W + rand(20, 180),
+          x: W + rand(40, this.level === 1 ? 260 : 190),
           y: rand(190, 438),
-          w: rand(60, 86),
-          h: rand(34, 48),
+          w: rand(settings.obstacleW[0], settings.obstacleW[1]),
+          h: rand(settings.obstacleH[0], settings.obstacleH[1]),
           color: i % 2 === 0 ? "#ff756b" : "#b9a6ff",
         });
       }
-      this.spawn = this.level === 1 ? rand(0.7, 1.1) : rand(0.45, 0.8);
+      this.spawn = rand(settings.spawnMin, settings.spawnMax);
     }
     if (this.coinSpawn <= 0) {
       this.coinItems.push({ x: W + 30, y: rand(198, 430), r: 12 });
-      this.coinSpawn = rand(1.2, 1.8);
+      this.coinSpawn = rand(settings.coinMin, settings.coinMax);
     }
 
     for (const obstacle of this.obstacles) obstacle.x -= roadSpeed * dt;
     for (const coin of this.coinItems) coin.x -= roadSpeed * dt;
     const carBox = this.carBox();
+    const hitBox = {
+      x: carBox.x + settings.hitPadding,
+      y: carBox.y + settings.hitPadding,
+      w: carBox.w - settings.hitPadding * 2,
+      h: carBox.h - settings.hitPadding * 2,
+    };
     for (const obstacle of this.obstacles) {
-      if (rectHit(carBox, obstacle)) this.fail();
+      if (rectHit(hitBox, obstacle)) this.fail();
     }
     for (const coin of this.coinItems) {
       if (!coin.got && circleHit({ x: this.car.x, y: this.car.y, r: 32 }, coin)) {
@@ -638,7 +686,7 @@ class ObstacleDodge extends BaseGame {
     this.obstacles = this.obstacles.filter((obstacle) => obstacle.x > -80);
     this.coinItems = this.coinItems.filter((coin) => !coin.got && coin.x > -50);
 
-    if (this.distance >= 680) {
+    if (this.distance >= settings.finishDistance) {
       this.state = "parking";
       this.car.x = 640;
       this.car.y = 318;
@@ -651,6 +699,7 @@ class ObstacleDodge extends BaseGame {
   }
 
   updateFingerAndToyCar(dt) {
+    const settings = this.levelSettings();
     const up = keys.has("arrowup") || keys.has("w");
     const down = keys.has("arrowdown") || keys.has("s");
     const left = keys.has("arrowleft") || keys.has("a");
@@ -659,16 +708,16 @@ class ObstacleDodge extends BaseGame {
       this.finger.tx = pointer.x;
       this.finger.ty = pointer.y;
     }
-    if (left) this.finger.tx -= 360 * dt;
-    if (right) this.finger.tx += 360 * dt;
-    if (up) this.finger.ty -= 360 * dt;
-    if (down) this.finger.ty += 360 * dt;
+    if (left) this.finger.tx -= settings.fingerSpeed * dt;
+    if (right) this.finger.tx += settings.fingerSpeed * dt;
+    if (up) this.finger.ty -= settings.fingerSpeed * dt;
+    if (down) this.finger.ty += settings.fingerSpeed * dt;
     this.finger.tx = clamp(this.finger.tx, 42, 884);
     this.finger.ty = clamp(this.finger.ty, 176, 452);
 
     const oldX = this.finger.x;
     const oldY = this.finger.y;
-    const follow = Math.min(1, dt * 14);
+    const follow = Math.min(1, dt * settings.fingerFollow);
     this.finger.x += (this.finger.tx - this.finger.x) * follow;
     this.finger.y += (this.finger.ty - this.finger.y) * follow;
     this.finger.vx = (this.finger.x - oldX) / Math.max(dt, 0.001);
@@ -681,12 +730,12 @@ class ObstacleDodge extends BaseGame {
     this.finger.contact = d < pushRadius;
     if (this.finger.contact) {
       const overlap = pushRadius - d;
-      this.car.vx += (dx / d) * overlap * 32 * dt + this.finger.vx * 0.16;
-      this.car.vy += (dy / d) * overlap * 32 * dt + this.finger.vy * 0.16;
+      this.car.vx += (dx / d) * overlap * settings.pushForce * dt + this.finger.vx * settings.fingerInfluence;
+      this.car.vy += (dy / d) * overlap * settings.pushForce * dt + this.finger.vy * settings.fingerInfluence;
     }
 
-    this.car.vx *= 0.91;
-    this.car.vy *= 0.91;
+    this.car.vx *= settings.friction;
+    this.car.vy *= settings.friction;
     this.car.x += this.car.vx * dt;
     this.car.y += this.car.vy * dt;
     if (this.car.x < 92) {
@@ -801,11 +850,13 @@ class ObstacleDodge extends BaseGame {
     }
     c.setLineDash([]);
 
-    const finishX = 840 - clamp(this.distance / 680, 0, 1) * 680;
+    const settings = this.levelSettings();
+    const progress = clamp(this.distance / settings.finishDistance, 0, 1);
+    const finishX = 840 - progress * 680;
     c.fillStyle = "#f7efe1";
     c.fillRect(finishX, 160, 7, 310);
     c.fillStyle = "#ffd166";
-    c.fillRect(78, 118, 800 * clamp(this.distance / 680, 0, 1), 9);
+    c.fillRect(78, 118, 800 * progress, 9);
     c.strokeStyle = "rgba(255,255,255,.14)";
     c.strokeRect(78, 118, 800, 9);
 
@@ -847,7 +898,7 @@ class ObstacleDodge extends BaseGame {
     drawGuidePanel(c, "현재 할 일", [
       this.state === "parking" ? "손가락으로 차를 주차칸 안에 밀기" : "손가락으로 차를 밀어 다가오는 차 피하기",
       this.state === "parking" ? "칸 안에서 잠깐 멈추면 통과" : "마우스/터치 또는 방향키가 손가락을 움직임",
-      "차끼리 부딪히면 실패",
+      this.level === 1 ? "1단계는 연습용이라 천천히 나옵니다" : "2단계는 차가 더 자주 나옵니다",
     ], 600, 20, 330, "#ffd166");
     drawSmallText(c, [
       "차가 스스로 움직이는 것이 아니라 손가락에 밀려 움직입니다.",
