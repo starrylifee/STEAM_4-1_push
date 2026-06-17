@@ -957,7 +957,7 @@ class HouseBuilder extends BaseGame {
   constructor() {
     super(
       "집만들기",
-      "나무판자, 타일, 지지대를 고르고 회전시켜 알맞은 위치에 붙입니다. 힌트와 포인트, 위태로움 상태가 있습니다.",
+      "재료를 고르고, 회전 각도를 맞춘 뒤 노란 위치를 클릭하거나 붙이기 버튼을 눌러 집을 완성합니다.",
       "집만들기.pdf",
     );
     this.reset();
@@ -971,7 +971,7 @@ class HouseBuilder extends BaseGame {
     this.selected = "support";
     this.rotation = 0;
     this.step = 0;
-    this.hint = "";
+    this.hint = "1. 재료 선택 → 2. 회전 맞추기 → 3. 노란 위치 클릭";
     this.specialUsed = false;
     this.tasks = [
       { x: 230, y: 346, w: 34, h: 118, piece: "support", rot: 0, label: "왼쪽 지지대" },
@@ -998,10 +998,12 @@ class HouseBuilder extends BaseGame {
 
   select(piece) {
     this.selected = piece;
+    this.hint = `${this.pieceLabel(piece)} 선택됨. 오른쪽 미리보기에서 회전 상태를 확인하세요.`;
   }
 
   rotate(delta = 90) {
     this.rotation = (this.rotation + delta + 360) % 360;
+    this.hint = `현재 선택한 ${this.pieceLabel(this.selected)}: ${this.rotation}도 회전`;
   }
 
   useHint() {
@@ -1039,11 +1041,11 @@ class HouseBuilder extends BaseGame {
       this.placed.push(task);
       this.step += 1;
       this.points += 5;
-      this.hint = "좋아요! 집이 더 튼튼해졌어요.";
+      this.hint = `${task.label} 붙이기 성공! 다음 노란 위치로 이동합니다.`;
       if (this.step >= this.tasks.length) this.state = "won";
     } else {
       this.stability -= 1;
-      this.hint = "앗, 집이 위태로워요! 재료와 회전 각도를 다시 확인하세요.";
+      this.hint = `아직 안 맞아요. 필요한 것: ${this.pieceLabel(task.piece)} ${task.rot}도`;
       if (this.stability <= 0) this.state = "fail";
     }
   }
@@ -1134,6 +1136,112 @@ class HouseBuilder extends BaseGame {
     c.restore();
   }
 
+  drawWorkflow(c) {
+    const steps = [
+      ["1", "재료 선택", this.selected ? "#3be2c0" : "rgba(255,255,255,.28)"],
+      ["2", `${this.rotation}도 회전`, "#ffd166"],
+      ["3", "노란 위치 클릭", this.state === "playing" ? "#ff756b" : "rgba(255,255,255,.28)"],
+    ];
+    steps.forEach(([num, label, color], i) => {
+      const x = 76 + i * 164;
+      c.save();
+      roundRect(c, x, 532, 138, 42, 8);
+      c.fillStyle = "rgba(16,17,20,.7)";
+      c.fill();
+      c.strokeStyle = color;
+      c.lineWidth = 2;
+      c.stroke();
+      c.fillStyle = color;
+      c.font = "900 18px system-ui, sans-serif";
+      c.fillText(num, x + 14, 558);
+      c.fillStyle = "#f7efe1";
+      c.font = "800 15px system-ui, sans-serif";
+      c.fillText(label, x + 40, 558);
+      c.restore();
+    });
+  }
+
+  drawSelectedPreview(c, x, y) {
+    const task = this.currentTask();
+    const needPiece = task ? this.selected === task.piece : true;
+    const needRot = task ? this.rotation === task.rot : true;
+    c.save();
+    c.fillStyle = "rgba(247,239,225,.06)";
+    roundRect(c, x, y, 230, 116, 8);
+    c.fill();
+    c.strokeStyle = "rgba(255,255,255,.16)";
+    c.stroke();
+    c.fillStyle = "#f7efe1";
+    c.font = "850 15px system-ui, sans-serif";
+    c.fillText("선택 조각 미리보기", x + 14, y + 26);
+    c.fillStyle = needPiece && needRot ? "#3be2c0" : "#ffd166";
+    c.font = "800 14px system-ui, sans-serif";
+    c.fillText(`${this.pieceLabel(this.selected)} / ${this.rotation}도`, x + 14, y + 50);
+    c.fillStyle = needPiece ? "#3be2c0" : "#ff756b";
+    c.fillText(needPiece ? "재료 맞음" : "재료 다름", x + 124, y + 50);
+    c.fillStyle = needRot ? "#3be2c0" : "#ff756b";
+    c.fillText(needRot ? "각도 맞음" : "각도 다름", x + 124, y + 72);
+    c.restore();
+
+    const previewSize = this.selected === "plank" ? [96, 22] : this.selected === "support" ? [28, 78] : this.selected === "roof" ? [84, 58] : [58, 58];
+    this.drawPiece(c, this.selected, x + 36, y + 54, previewSize[0], previewSize[1], this.rotation, false);
+
+    c.save();
+    c.strokeStyle = "#ffd166";
+    c.lineWidth = 3;
+    c.beginPath();
+    c.arc(x + 82, y + 82, 34, -Math.PI / 2, -Math.PI / 2 + (this.rotation / 360) * Math.PI * 2);
+    c.stroke();
+    c.fillStyle = "#ffd166";
+    c.font = "800 12px system-ui, sans-serif";
+    c.fillText("회전", x + 66, y + 104);
+    c.restore();
+  }
+
+  drawPlacementGuide(c, task) {
+    const pulse = 0.45 + Math.sin(this.time * 5) * 0.16;
+    c.save();
+    c.fillStyle = `rgba(255,209,102,${pulse})`;
+    roundRect(c, task.x - 10, task.y - 10, task.w + 20, task.h + 20, 8);
+    c.fill();
+    c.strokeStyle = "#ffd166";
+    c.lineWidth = 4;
+    c.setLineDash([10, 8]);
+    roundRect(c, task.x - 12, task.y - 12, task.w + 24, task.h + 24, 8);
+    c.stroke();
+    c.setLineDash([]);
+
+    const labelX = clamp(task.x + task.w + 26, 230, 640);
+    const labelY = clamp(task.y + task.h / 2 - 44, 126, 438);
+    c.strokeStyle = "#ffd166";
+    c.lineWidth = 3;
+    c.beginPath();
+    c.moveTo(labelX, labelY + 42);
+    c.lineTo(task.x + task.w / 2, task.y + task.h / 2);
+    c.stroke();
+    c.beginPath();
+    c.moveTo(task.x + task.w / 2, task.y + task.h / 2);
+    c.lineTo(task.x + task.w / 2 + 14, task.y + task.h / 2 - 7);
+    c.lineTo(task.x + task.w / 2 + 8, task.y + task.h / 2 + 10);
+    c.closePath();
+    c.fillStyle = "#ffd166";
+    c.fill();
+    c.fillStyle = "rgba(16,17,20,.86)";
+    roundRect(c, labelX, labelY, 176, 56, 8);
+    c.fill();
+    c.strokeStyle = "#ffd166";
+    c.stroke();
+    c.fillStyle = "#ffd166";
+    c.font = "900 16px system-ui, sans-serif";
+    c.fillText("여기를 클릭하면 붙습니다", labelX + 12, labelY + 23);
+    c.fillStyle = "#f7efe1";
+    c.font = "750 13px system-ui, sans-serif";
+    c.fillText(`${this.pieceLabel(task.piece)} ${task.rot}도 필요`, labelX + 12, labelY + 43);
+    c.restore();
+
+    this.addButton(c, clamp(task.x + task.w + 22, 230, 646), clamp(task.y + task.h / 2 + 18, 156, 444), 104, 36, "붙이기", () => this.placeCurrent(), "#ffd166");
+  }
+
   draw(c) {
     this.beginFrame();
     drawBackplate(c, "#151815");
@@ -1152,23 +1260,20 @@ class HouseBuilder extends BaseGame {
     for (const task of this.placed) this.drawPiece(c, task.piece, task.x, task.y, task.w, task.h, task.rot, false);
     const task = this.currentTask();
     if (task && this.state === "playing") {
-      c.strokeStyle = "#ffd166";
-      c.lineWidth = 3;
-      c.setLineDash([8, 8]);
-      roundRect(c, task.x - 6, task.y - 6, task.w + 12, task.h + 12, 8);
-      c.stroke();
-      c.setLineDash([]);
+      this.drawPlacementGuide(c, task);
+      this.drawPiece(c, this.selected, task.x, task.y, task.w, task.h, this.rotation, true);
     }
 
-    drawCapsule(c, 22, 20, "재료 선택 → Q/E 회전 → 노란 위치 클릭", "#b7f7d4");
+    drawCapsule(c, 22, 20, "재료 선택 → 회전 상태 확인 → 노란 위치 클릭 또는 붙이기", "#b7f7d4");
     drawSmallText(c, [
-      "PDF 규칙: 판자/타일을 시계방향 270도까지 돌려 붙입니다.",
-      "힌트는 5P를 사용하고, 맞게 붙이면 5P를 얻습니다.",
-      "틀리면 집이 위태로워지고 안정도가 줄어듭니다.",
+      "오른쪽 미리보기가 지금 선택한 재료와 회전 각도입니다.",
+      "노란색으로 깜빡이는 곳이 이번에 붙일 위치입니다.",
+      "재료와 각도가 맞으면 위치 클릭 또는 붙이기 버튼으로 완성됩니다.",
     ], 22, 64);
+    this.drawWorkflow(c);
 
     c.fillStyle = "rgba(16,17,20,.68)";
-    roundRect(c, 622, 120, 284, 358, 8);
+    roundRect(c, 622, 120, 284, 462, 8);
     c.fill();
     c.fillStyle = "#3be2c0";
     c.font = "900 22px system-ui, sans-serif";
@@ -1179,6 +1284,7 @@ class HouseBuilder extends BaseGame {
     c.fillText(`현재 목표: ${taskText}`, 648, 194);
     c.fillText(`선택: ${this.pieceLabel(this.selected)} / ${this.rotation}도`, 648, 224);
     c.fillText(this.hint || "집을 어떻게 짓지?", 648, 254);
+    this.drawSelectedPreview(c, 648, 258);
 
     const pieces = [
       ["support", "1 지지대"],
@@ -1191,12 +1297,12 @@ class HouseBuilder extends BaseGame {
     ];
     pieces.forEach(([piece, label], i) => {
       const x = 648 + (i % 2) * 124;
-      const y = 284 + Math.floor(i / 2) * 44;
+      const y = 386 + Math.floor(i / 2) * 36;
       this.addButton(c, x, y, 112, 34, label, () => this.select(piece), piece === this.selected ? "#3be2c0" : "rgba(255,255,255,.35)");
     });
-    this.addButton(c, 648, 462, 72, 36, "회전", () => this.rotate(90), "#ffd166");
-    this.addButton(c, 730, 462, 72, 36, "힌트", () => this.useHint(), "#b9a6ff");
-    this.addButton(c, 812, 462, 72, 36, "특수", () => this.useSpecial(), "#ff756b");
+    this.addButton(c, 648, 532, 72, 36, "⟲ -90", () => this.rotate(-90), "#ffd166");
+    this.addButton(c, 730, 532, 72, 36, "⟳ +90", () => this.rotate(90), "#ffd166");
+    this.addButton(c, 812, 532, 72, 36, "힌트", () => this.useHint(), "#b9a6ff");
 
     if (this.state === "intro") {
       drawMessage(c, "집짓기 게임", "시작하기를 누르면 재료를 돌려 집을 짓습니다.", "#ffd166");
