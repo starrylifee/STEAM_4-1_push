@@ -135,6 +135,24 @@ function drawSmallText(c, lines, x, y, color = "rgba(247,239,225,.78)") {
   c.restore();
 }
 
+function drawGuidePanel(c, title, lines, x, y, w = 300, accent = "#3be2c0") {
+  c.save();
+  const h = 48 + lines.length * 22;
+  roundRect(c, x, y, w, h, 8);
+  c.fillStyle = "rgba(16,17,20,.76)";
+  c.fill();
+  c.strokeStyle = accent;
+  c.lineWidth = 2;
+  c.stroke();
+  c.fillStyle = accent;
+  c.font = "900 16px system-ui, sans-serif";
+  c.fillText(title, x + 14, y + 25);
+  c.fillStyle = "#f7efe1";
+  c.font = "700 14px system-ui, sans-serif";
+  lines.forEach((line, i) => c.fillText(line, x + 14, y + 52 + i * 22));
+  c.restore();
+}
+
 function drawPlayer(c, x, y, color = "#3be2c0") {
   c.save();
   c.translate(x, y);
@@ -253,6 +271,7 @@ class AebiAdventure extends BaseGame {
     this.problem = null;
     this.problemTarget = null;
     this.loadStage();
+    this.state = "ready";
   }
 
   loadStage() {
@@ -470,6 +489,11 @@ class AebiAdventure extends BaseGame {
 
     drawPlayer(c, this.player.x, this.player.y, this.skin === "신전 망토" ? "#b9a6ff" : "#3be2c0");
     drawCapsule(c, 22, 20, "외계인 처치: Space 또는 클릭으로 도형 이동 문제 풀기", "#3be2c0");
+    drawGuidePanel(c, "현재 할 일", [
+      "1. 방향키/WASD로 외계인 앞까지 이동",
+      "2. Space 또는 클릭으로 도형 문제 풀기",
+      "3. 적을 모두 이기고 신전 보스에게 가기",
+    ], 612, 20, 320, "#3be2c0");
     drawSmallText(c, [
       `현재 행성: ${this.stageNames[this.stage]}`,
       "적을 모두 물리치면 신전 앞 보스가 나타납니다.",
@@ -478,7 +502,10 @@ class AebiAdventure extends BaseGame {
 
     const enemy = this.nearestEnemy();
     if (this.state === "playing" && enemy) drawCapsule(c, 380, 426, "공격 가능", "#ff756b");
-    if (this.state === "ready") drawMessage(c, "에이비의 모험", "행성을 돌며 외계인을 무찌르고 신전을 여세요.");
+    if (this.state === "ready") {
+      drawMessage(c, "에이비의 모험", "이동하고, 문제를 풀고, 신전을 여는 게임입니다.");
+      this.addButton(c, 404, 382, 152, 44, "시작하기", () => this.start(), "#3be2c0");
+    }
     if (this.state === "shapePuzzle") this.drawPuzzle(c);
     if (this.state === "shrine") {
       drawMessage(c, "신전 도착", "코인으로 옷을 사거나 다음 행성으로 이동하세요.", "#ffd166");
@@ -715,6 +742,11 @@ class ObstacleDodge extends BaseGame {
 
     this.drawCar(c);
     drawCapsule(c, 22, 20, "밀기: 드래그 또는 방향키로 차를 움직이기", "#ffd166");
+    drawGuidePanel(c, "현재 할 일", [
+      this.state === "parking" ? "주차장 안으로 차를 넣기" : "장애물을 피하며 결승선까지 이동",
+      this.state === "parking" ? "차가 주차칸 안에 들어가면 Space" : "코인을 먹으면 자동차를 살 수 있음",
+      "부딪히면 실패 화면으로 이동",
+    ], 600, 20, 330, "#ffd166");
     drawSmallText(c, [
       "장애물에 치이면 다시 시작됩니다.",
       "마지막에는 주차장에 주차해야 통과합니다.",
@@ -944,8 +976,16 @@ class TargetShooter extends BaseGame {
     }
 
     drawCapsule(c, 22, 20, "문제 풀이 → 정확도/발사력 상승 → 조준경으로 발사", "#ff756b");
+    drawGuidePanel(c, "현재 할 일", [
+      this.state === "question" ? "도형 이동 문제의 정답을 고르기" : "노란 조준경을 적 중앙에 맞추기",
+      "문제를 맞히면 정확도와 발사력이 올라감",
+      "5번 맞히면 성공, 9번 쏘면 종료",
+    ], 600, 20, 330, "#ff756b");
     drawSmallText(c, [this.feedback, "방향키로 조준경 이동, Space 또는 클릭으로 발사"], 22, 64);
-    if (this.state === "ready") drawMessage(c, "적을 맞춰라", "도형 이동 문제를 풀고 대포를 발사하세요.");
+    if (this.state === "ready") {
+      drawMessage(c, "적을 맞춰라", "문제를 풀어 대포 성능을 올린 뒤 조준합니다.");
+      this.addButton(c, 404, 382, 152, 44, "시작하기", () => this.start(), "#3be2c0");
+    }
     if (this.state === "question") this.drawQuestion(c);
     if (this.state === "aim") this.addButton(c, 780, 504, 118, 42, "발사", () => this.fire(), "#3be2c0");
     if (this.state === "won") drawMessage(c, "파이팅!", "문제를 풀고 적을 모두 맞췄습니다.", "#3be2c0");
@@ -1471,9 +1511,17 @@ class BulletDefense extends BaseGame {
     c.font = "900 24px system-ui, sans-serif";
     c.fillText(this.flash, 438, 162);
     drawCapsule(c, 22, 20, "평면도형 이동 문제를 맞히면 방패가 나옵니다", "#ffd166");
+    drawGuidePanel(c, "현재 할 일", [
+      this.state === "question" ? "문제 정답을 골라 방패 만들기" : "총알이 가까워질 때까지 기다리기",
+      "정답: 방패로 막기",
+      "오답: 목숨 1개 감소",
+    ], 594, 20, 330, "#ffd166");
     drawSmallText(c, ["총알이 가까워지면 문제가 뜹니다.", "목숨은 세 개입니다."], 22, 64);
 
-    if (this.state === "ready") drawMessage(c, "총알을 피해라", "문제를 맞혀 방패로 총알을 막으세요.");
+    if (this.state === "ready") {
+      drawMessage(c, "총알을 피해라", "문제를 맞혀 방패로 총알을 막으세요.");
+      this.addButton(c, 404, 382, 152, 44, "시작하기", () => this.start(), "#3be2c0");
+    }
     if (this.state === "question") this.drawQuestion(c);
     if (this.state === "won") drawMessage(c, "막는 것 성공", "총알을 모두 방패로 막았습니다.", "#3be2c0");
     if (this.state === "lost") drawMessage(c, "맞는 것", "총알을 세 번 맞았습니다. 다시 도전하세요.", "#ff756b");
