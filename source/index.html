@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>STEAM 미니 아케이드</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">STEAM 4-1 Mini Arcade</p>
+          <h1 id="gameTitle">에이비의 모험</h1>
+        </div>
+      </header>
+
+      <main class="game-layout">
+        <nav class="game-menu" aria-label="게임 선택">
+          <button class="game-tab is-active" type="button" data-game="aebi">
+            <span>01</span>
+            에이비의 모험
+          </button>
+          <button class="game-tab" type="button" data-game="dodge">
+            <span>02</span>
+            장애물 피하기
+          </button>
+          <button class="game-tab" type="button" data-game="shoot">
+            <span>03</span>
+            적을 맞춰라
+          </button>
+          <button class="game-tab" type="button" data-game="house">
+            <span>04</span>
+            집만들기
+          </button>
+          <button class="game-tab" type="button" data-game="bullet">
+            <span>05</span>
+            총알을 피해라
+          </button>
+        </nav>
+
+        <section class="play-zone" aria-label="게임 플레이 영역">
+          <div class="canvas-frame">
+            <canvas
+              id="gameCanvas"
+              width="960"
+              height="600"
+              aria-label="선택한 미니게임 화면"
+            ></canvas>
+          </div>
+
+          <div class="control-row">
+            <div class="action-buttons">
+              <button id="startBtn" class="primary-action" type="button">
+                시작
+              </button>
+              <button id="resetBtn" class="ghost-action" type="button">
+                다시
+              </button>
+            </div>
+            <p id="gameStats" class="stats-line" aria-live="polite"></p>
+          </div>
+
+          <p id="gameInstructions" class="instructions"></p>
+
+          <section class="student-plan" aria-labelledby="studentPlanTitle">
+            <div class="plan-heading">
+              <h2 id="studentPlanTitle">학생 기획안</h2>
+              <a id="planLink" href="./readable-plans/에이비의 모험.pdf" target="_blank" rel="noreferrer">PDF 열기</a>
+            </div>
+            <iframe
+              id="planFrame"
+              title="학생 기획안 PDF"
+              src="./readable-plans/에이비의 모험.pdf"
+            ></iframe>
+          </section>
+        </section>
+      </main>
+    </div>
+
+    <script src="./app.js" defer></script>
+  </body>
+</html>
