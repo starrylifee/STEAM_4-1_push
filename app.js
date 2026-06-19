@@ -201,11 +201,93 @@ class BaseGame {
     this.buttons = [];
     this.state = "ready";
     this.time = 0;
+    // 시작 전 브리핑: 학생 수정안에 대한 AI 평가/코멘트. 하위 클래스에서 채운다.
+    this.briefing = null;
+    this.acknowledged = false;
+    this.briefingStart = null;
+  }
+
+  needsBriefing() {
+    return !this.acknowledged && this.briefing && this.briefing.lines.length > 0;
   }
 
   start() {
     if (this.state === "won" || this.state === "lost" || this.state === "fail") this.reset();
     if (this.state === "ready" || this.state === "intro") this.state = "playing";
+  }
+
+  // 줄바꿈 자동 처리하며 텍스트를 그린다. 마지막 줄의 y를 반환.
+  wrapText(c, text, x, y, maxW, lineH) {
+    const words = text.split(" ");
+    let line = "";
+    let cy = y;
+    for (const word of words) {
+      const test = line ? `${line} ${word}` : word;
+      if (c.measureText(test).width > maxW && line) {
+        c.fillText(line, x, cy);
+        line = word;
+        cy += lineH;
+      } else {
+        line = test;
+      }
+    }
+    if (line) c.fillText(line, x, cy);
+    return cy;
+  }
+
+  // 학생 수정안에 대한 AI 평가를 보여주고, 다 읽으면 시작하게 하는 화면
+  drawBriefing(c) {
+    drawBackplate(c, "#0e1014");
+    const x = 138;
+    const y = 70;
+    const w = 684;
+    const h = 460;
+    c.save();
+    c.fillStyle = "rgba(16,17,20,.94)";
+    roundRect(c, x, y, w, h, 10);
+    c.fill();
+    c.strokeStyle = "#ffd166";
+    c.lineWidth = 2;
+    c.stroke();
+    c.textAlign = "left";
+    c.textBaseline = "alphabetic";
+    c.fillStyle = "#ffd166";
+    c.font = "900 24px system-ui, sans-serif";
+    c.fillText("📋 AI 선생님의 코멘트 (먼저 읽어요)", x + 28, y + 44);
+    c.fillStyle = "rgba(247,239,225,.6)";
+    c.font = "700 15px system-ui, sans-serif";
+    c.fillText(this.briefing.group, x + 28, y + 70);
+    c.fillStyle = "#f7efe1";
+    c.font = "650 17px system-ui, sans-serif";
+    let ty = y + 108;
+    const maxW = w - 56;
+    for (const line of this.briefing.lines) {
+      ty = this.wrapText(c, line, x + 28, ty, maxW, 25) + 16;
+    }
+    c.restore();
+
+    if (this.briefingStart === null) this.briefingStart = this.time;
+    const left = Math.ceil(3 - (this.time - this.briefingStart));
+    if (left > 0) {
+      c.save();
+      roundRect(c, x + w / 2 - 110, y + h - 56, 220, 40, 8);
+      c.fillStyle = "rgba(16,17,20,.7)";
+      c.fill();
+      c.strokeStyle = "rgba(255,255,255,.22)";
+      c.lineWidth = 2;
+      c.stroke();
+      c.fillStyle = "rgba(247,239,225,.6)";
+      c.font = "800 16px system-ui, sans-serif";
+      c.textAlign = "center";
+      c.textBaseline = "middle";
+      c.fillText(`읽는 중… ${left}`, x + w / 2, y + h - 36);
+      c.restore();
+    } else {
+      this.addButton(c, x + w / 2 - 110, y + h - 56, 220, 40, "다 읽었어요, 시작!", () => {
+        this.acknowledged = true;
+        this.start();
+      }, "#3be2c0");
+    }
   }
 
   reset() {
@@ -268,6 +350,14 @@ class AebiAdventure extends BaseGame {
       "외계인을 만나면 공격 버튼으로 도형 이동 문제를 풀고, 보스를 이기면 신전에서 코인과 아이템을 얻습니다.",
       "에이비의 모험.pdf",
     );
+    this.briefing = {
+      group: "네일클럽 모둠 수정안에 대한 평가",
+      lines: [
+        "행성을 7개로 늘리고, 보스를 이기면 깃발을 꽂는 아이디어가 모험의 목표를 아주 분명하게 만들어 줬어요. 그대로 반영했어요.",
+        "\"문제를 맞히면 뭐가 나오면 좋겠다\"는 의견도 좋아서, 적을 물리치면 코인을 받도록 했어요.",
+        "[AI 코멘트] 도형 이동(밀기·돌리기·뒤집기) 문제는 이번 수학 단원의 핵심이라 꼭 남겨 두었어요. 이동하며 풀어 보세요!",
+      ],
+    };
     this.reset();
   }
 
@@ -487,6 +577,10 @@ class AebiAdventure extends BaseGame {
 
   draw(c) {
     this.beginFrame();
+    if (this.needsBriefing()) {
+      this.drawBriefing(c);
+      return;
+    }
     const theme = this.theme(); // 행성마다 다른 색 테마
     drawBackplate(c, theme.sky);
     drawStars(c, this.time, 46);
@@ -579,6 +673,14 @@ class ObstacleDodge extends BaseGame {
       "큰 손가락으로 장난감 차를 직접 밀어 다가오는 차를 피하고, 마지막에는 주차칸 안에 밀어 넣습니다.",
       "장애물 피하기.pdf",
     );
+    this.briefing = {
+      group: "스마일 모둠 수정안에 대한 평가",
+      lines: [
+        "규칙을 번호로 꼼꼼하게 정리한 게 정말 인상적이었어요. 실패 문구, 코인 표시, 성별 선택, 자동차 구매까지 거의 다 반영했어요.",
+        "한 라운드를 깨면 30코인을 주고, 레벨은 1부터 20까지 올라가게 했어요.",
+        "[AI 코멘트] 20개 레벨을 똑같이 손으로 만들기보다, 레벨이 오르면 자동으로 차가 빨라지고 많아지게 했어요. 같은 재미를 더 알뜰하게 만든 방법이에요.",
+      ],
+    };
     this.reset();
   }
 
@@ -876,6 +978,10 @@ class ObstacleDodge extends BaseGame {
 
   draw(c) {
     this.beginFrame();
+    if (this.needsBriefing()) {
+      this.drawBriefing(c);
+      return;
+    }
     drawBackplate(c, "#141619");
     c.fillStyle = "rgba(247,239,225,.07)";
     roundRect(c, 64, 156, 832, 314, 8);
@@ -972,6 +1078,14 @@ class TargetShooter extends BaseGame {
       "대포를 쏘기 전 도형의 밀기, 돌리기, 뒤집기 문제를 풀어 정확도와 발사력을 높인 뒤 조준경으로 적을 맞춥니다.",
       "적을 맞춰라.pdf",
     );
+    this.briefing = {
+      group: "?몰라? 모둠 수정안에 대한 평가",
+      lines: [
+        "대포를 '포차(트럭 대포)' 모양으로 그려 달라는 그림이 아주 구체적이라, 그대로 새로 그렸어요.",
+        "\"적을 맞춰 아이템을 얻자\"는 아이디어도 넣어서, 명중하면 아이템을 받게 했어요.",
+        "[AI 코멘트] 문제를 풀어 정확도와 발사력을 올리는 흐름이 공부와 재미를 잘 엮었어요. 그래서 도형 이동 문제는 그대로 살렸어요.",
+      ],
+    };
     this.reset();
   }
 
@@ -1106,6 +1220,10 @@ class TargetShooter extends BaseGame {
 
   draw(c) {
     this.beginFrame();
+    if (this.needsBriefing()) {
+      this.drawBriefing(c);
+      return;
+    }
     drawBackplate(c, "#16151b");
     c.fillStyle = "rgba(247,239,225,.06)";
     c.fillRect(0, 536, W, 64);
@@ -1233,6 +1351,14 @@ class HouseBuilder extends BaseGame {
       "재료를 고르고, 회전 각도를 맞춘 뒤 노란 위치를 클릭하거나 붙이기 버튼을 눌러 집을 완성합니다.",
       "집만들기.pdf",
     );
+    this.briefing = {
+      group: "크고작은 모둠 수정안에 대한 평가",
+      lines: [
+        "'한 집이 한 스테이지', 단계마다 5포인트, 번 포인트로 집을 꾸미기 — 보상 설계를 깊이 고민한 게 보였어요. 거의 다 반영했어요.",
+        "재료를 최대 270도까지 돌려 맞추는 규칙도 그대로 넣었어요.",
+        "[AI 코멘트] 확률 뽑기 상자(10%·30%…)는 넣지 않았어요. '운'보다 '노력한 만큼 확실히 받는' 보상이 더 공정하고 기분 좋아서, 단계 보상과 디테일 구매로 바꿨어요.",
+      ],
+    };
     this.reset();
   }
 
@@ -1572,6 +1698,10 @@ class HouseBuilder extends BaseGame {
 
   draw(c) {
     this.beginFrame();
+    if (this.needsBriefing()) {
+      this.drawBriefing(c);
+      return;
+    }
     drawBackplate(c, "#151815");
     c.fillStyle = "rgba(183,247,212,.08)";
     c.fillRect(0, 420, W, 180);
@@ -1667,6 +1797,14 @@ class BulletDefense extends BaseGame {
       left: { x: 76, y: 568, w: 50, h: 26 },
       down: { x: 130, y: 568, w: 50, h: 26 },
       right: { x: 184, y: 568, w: 50, h: 26 },
+    };
+    this.briefing = {
+      group: "총알을 피해라 모둠 수정안에 대한 평가",
+      lines: [
+        "원래 규칙(문제를 풀어 방패로 막기)을 빨간펜으로 직접 지우고 '방향키로 피하기'로 고친 결정이 정말 좋았어요!",
+        "게임 이름이 '피해라'인 만큼, 직접 피하는 게임이 훨씬 잘 어울려요. 아주 훌륭한 디버깅이에요.",
+        "[AI 코멘트] 수정안 그대로 반영했어요. 총구에서 날아오는 총알을 방향키나 화면 버튼으로 피하면 됩니다.",
+      ],
     };
     this.reset();
   }
@@ -1839,6 +1977,10 @@ class BulletDefense extends BaseGame {
 
   draw(c) {
     this.beginFrame();
+    if (this.needsBriefing()) {
+      this.drawBriefing(c);
+      return;
+    }
     drawBackplate(c, "#17151a");
     drawStars(c, this.time, 30);
     c.fillStyle = "rgba(247,239,225,.06)";
@@ -1913,6 +2055,7 @@ class ArcadeApp {
 
   bindEvents() {
     startBtn.addEventListener("click", () => {
+      if (this.game.needsBriefing()) return; // 브리핑을 다 읽기 전엔 시작 불가
       this.game.start();
       this.syncUi();
     });
