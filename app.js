@@ -1,3 +1,16 @@
+/*
+ * [AI 평가 — 학생 디버깅 페이퍼 수정안 반영 원칙]
+ * 학생들의 수정본(source/*(수정본).pdf)을 반영하면서, 다음 3가지를 지켰다.
+ * 코드 곳곳의 "[AI 평가]" 코멘트가 각 결정의 근거이다.
+ *
+ * 1. 수학 단원 사수 — 이 단원의 핵심은 '평면도형의 이동(밀기·돌리기·뒤집기)'.
+ *    총알 게임은 학생안대로 회피 액션으로 바꿨지만, 에이비의 모험·적을 맞춰라의
+ *    도형 퀴즈는 학습 목표라 반드시 유지한다.
+ * 2. 보상은 노력 비례로 — 집만들기의 '확률형 럭키박스(10%·30%·60%)'는 초등 대상
+ *    사행성 우려가 있어, 단계 완료 시 확정 지급 + 포인트로 디테일 구매로 대체했다.
+ * 3. 양은 스케일링으로 — 장애물 '20레벨', 에이비 '7행성'은 일일이 만들지 않고
+ *    레벨 수치/색 테마로 자동 확장해 작업량 대비 효과를 높였다.
+ */
 const canvas = document.querySelector("#gameCanvas");
 const ctx = canvas.getContext("2d");
 const titleEl = document.querySelector("#gameTitle");
@@ -261,10 +274,22 @@ class AebiAdventure extends BaseGame {
   reset() {
     super.reset();
     this.state = "ready";
-    this.stageNames = ["수성", "금성", "지구"];
+    // [AI 평가] 학생안의 7개 행성을 반영. 행성마다 그림을 따로 그리는 대신
+    // 색 테마 7종으로 구분해 작업량 대비 효과를 높였다.
+    this.stageNames = ["식물별", "자극별", "우주별", "동물별", "도시별", "조명별", "야생별"];
+    this.planetThemes = [
+      { sky: "#13251a", ground: "#1f3a23", accent: "#7CFFB2" },
+      { sky: "#2a1320", ground: "#3a1f2a", accent: "#ff8fa3" },
+      { sky: "#111723", ground: "#1d2333", accent: "#8fb8ff" },
+      { sky: "#241a12", ground: "#3a2a1c", accent: "#ffcf8f" },
+      { sky: "#1a1d24", ground: "#2a2f3a", accent: "#c0c8d4" },
+      { sky: "#241f10", ground: "#3a3218", accent: "#ffe066" },
+      { sky: "#1e1228", ground: "#2e1d3a", accent: "#c79bff" },
+    ];
     this.stage = 0;
     this.coins = 0;
     this.hp = 3;
+    this.flagPlanted = false;
     this.skin = "기본 옷";
     this.player = { x: 92, y: 430, vy: 0, onGround: true };
     this.attackCooldown = 0;
@@ -284,7 +309,12 @@ class AebiAdventure extends BaseGame {
       { x: 705, y: 430, alive: true, name: "외계인 C" },
     ];
     this.boss = { x: 830, y: 414, alive: true, open: false };
+    this.flagPlanted = false; // 행성마다 보스를 잡으면 깃발을 꽂는다
     this.state = "playing";
+  }
+
+  theme() {
+    return this.planetThemes[this.stage % this.planetThemes.length];
   }
 
   start() {
@@ -292,6 +322,8 @@ class AebiAdventure extends BaseGame {
   }
 
   openPuzzle(target) {
+    // [AI 평가] 평면도형의 이동(밀기·돌리기·뒤집기) 퀴즈 — 이 단원의 핵심 학습 목표.
+    // 총알 게임에서 퀴즈를 뺐기 때문에, 이 게임의 도형 문제는 반드시 유지한다.
     this.problem = transformQuestions[Math.floor(rand(0, transformQuestions.length))];
     this.problemTarget = target;
     this.state = "shapePuzzle";
@@ -308,6 +340,7 @@ class AebiAdventure extends BaseGame {
         this.boss.alive = false;
         this.boss.open = true;
         this.coins += 100;
+        this.flagPlanted = true; // 학생안: 보스를 없애고 깃발을 꽂는다
         this.state = "shrine";
         this.problem = null;
         return;
@@ -454,12 +487,13 @@ class AebiAdventure extends BaseGame {
 
   draw(c) {
     this.beginFrame();
-    drawBackplate(c, "#111723");
+    const theme = this.theme(); // 행성마다 다른 색 테마
+    drawBackplate(c, theme.sky);
     drawStars(c, this.time, 46);
 
     c.fillStyle = "rgba(247,239,225,.12)";
     c.fillRect(0, 490, W, 110);
-    c.fillStyle = "#342921";
+    c.fillStyle = theme.ground;
     c.fillRect(0, 462, W, 30);
 
     c.fillStyle = "rgba(59,226,192,.12)";
@@ -487,6 +521,26 @@ class AebiAdventure extends BaseGame {
       c.restore();
     }
 
+    if (this.flagPlanted) {
+      // 보스를 잡으면 행성에 깃발을 꽂는다(학생안)
+      c.save();
+      c.translate(840, 462);
+      c.strokeStyle = "#f7efe1";
+      c.lineWidth = 4;
+      c.beginPath();
+      c.moveTo(0, 0);
+      c.lineTo(0, -64);
+      c.stroke();
+      c.fillStyle = theme.accent;
+      c.beginPath();
+      c.moveTo(0, -64);
+      c.lineTo(46, -54);
+      c.lineTo(0, -42);
+      c.closePath();
+      c.fill();
+      c.restore();
+    }
+
     drawPlayer(c, this.player.x, this.player.y, this.skin === "신전 망토" ? "#b9a6ff" : "#3be2c0");
     drawCapsule(c, 22, 20, "외계인 처치: Space 또는 클릭으로 도형 이동 문제 풀기", "#3be2c0");
     drawGuidePanel(c, "현재 할 일", [
@@ -495,9 +549,9 @@ class AebiAdventure extends BaseGame {
       "3. 적을 모두 이기고 신전 보스에게 가기",
     ], 612, 20, 320, "#3be2c0");
     drawSmallText(c, [
-      `현재 행성: ${this.stageNames[this.stage]}`,
+      `현재 행성: ${this.stageNames[this.stage]} (${this.stage + 1}/${this.stageNames.length})`,
       "적을 모두 물리치면 신전 앞 보스가 나타납니다.",
-      "보스를 맞히면 100코인을 받고 다음 스테이지로 갑니다.",
+      "보스를 맞히면 100코인을 받고 깃발을 꽂은 뒤 다음 행성으로 갑니다.",
     ], 22, 64);
 
     const enemy = this.nearestEnemy();
@@ -508,11 +562,12 @@ class AebiAdventure extends BaseGame {
     }
     if (this.state === "shapePuzzle") this.drawPuzzle(c);
     if (this.state === "shrine") {
-      drawMessage(c, "신전 도착", "코인으로 옷을 사거나 다음 행성으로 이동하세요.", "#ffd166");
-      this.addButton(c, 312, 382, 158, 42, "다음 스테이지", () => this.nextStage(), "#3be2c0");
+      const last = this.stage >= this.stageNames.length - 1;
+      drawMessage(c, "깃발 꽂기 성공!", "코인으로 옷을 사거나 다음 행성으로 이동하세요.", "#ffd166");
+      this.addButton(c, 312, 382, 158, 42, last ? "탐험 마무리" : "다음 행성", () => this.nextStage(), "#3be2c0");
       this.addButton(c, 490, 382, 158, 42, "옷 80코인", () => this.buySkin(), "#b9a6ff");
     }
-    if (this.state === "won") drawMessage(c, "행성 탐험 성공", "모든 신전을 열었습니다.", "#3be2c0");
+    if (this.state === "won") drawMessage(c, "행성 탐험 성공", `${this.stageNames.length}개 행성에 모두 깃발을 꽂았습니다.`, "#3be2c0");
     if (this.state === "lost") drawMessage(c, "목숨을 잃었어요", "도형 이동 공격을 다시 연습해 보세요.", "#ff756b");
   }
 }
@@ -532,6 +587,7 @@ class ObstacleDodge extends BaseGame {
     this.state = "select";
     this.gender = null;
     this.level = 1;
+    this.maxLevel = 20; // [AI 평가] 학생안 "레벨 20까지" 반영
     this.coins = 0;
     this.carName = "기본차";
     this.carColor = "#3be2c0";
@@ -546,43 +602,27 @@ class ObstacleDodge extends BaseGame {
   }
 
   levelSettings() {
-    if (this.level === 1) {
-      return {
-        roadSpeed: 170,
-        distanceRate: 62,
-        finishDistance: 520,
-        obstacleCount: 1,
-        spawnMin: 1.55,
-        spawnMax: 2.2,
-        obstacleW: [54, 70],
-        obstacleH: [30, 40],
-        coinMin: 1.8,
-        coinMax: 2.5,
-        fingerSpeed: 300,
-        fingerFollow: 10,
-        pushForce: 21,
-        fingerInfluence: 0.1,
-        friction: 0.84,
-        hitPadding: 10,
-      };
-    }
+    // [AI 평가] 학생안은 "20레벨"이지만 20개를 손으로 만들지 않고
+    // 레벨 번호(1~20)에 따라 난이도를 자동 스케일링한다.
+    // 작업량 대비 효과가 크고, 레벨이 오를수록 자연스럽게 어려워진다.
+    const t = clamp((this.level - 1) / (this.maxLevel - 1), 0, 1);
     return {
-      roadSpeed: 245,
-      distanceRate: 82,
-      finishDistance: 640,
-      obstacleCount: 2,
-      spawnMin: 0.95,
-      spawnMax: 1.35,
-      obstacleW: [58, 80],
-      obstacleH: [32, 46],
-      coinMin: 1.35,
-      coinMax: 2,
-      fingerSpeed: 330,
-      fingerFollow: 12,
-      pushForce: 26,
-      fingerInfluence: 0.13,
-      friction: 0.87,
-      hitPadding: 7,
+      roadSpeed: 165 + t * 150,
+      distanceRate: 60 + t * 34,
+      finishDistance: 500 + t * 220,
+      obstacleCount: 1 + Math.floor((this.level - 1) / 5), // 5레벨마다 +1 (최대 4개)
+      spawnMin: 1.6 - t * 0.95,
+      spawnMax: 2.25 - t * 1.15,
+      obstacleW: [54 + t * 8, 70 + t * 12],
+      obstacleH: [30 + t * 4, 40 + t * 8],
+      coinMin: 1.8 - t * 0.55,
+      coinMax: 2.5 - t * 0.85,
+      fingerSpeed: 300 + t * 40,
+      fingerFollow: 10 + t * 3,
+      pushForce: 21 + t * 6,
+      fingerInfluence: 0.1 + t * 0.04,
+      friction: 0.84 + t * 0.04,
+      hitPadding: 10 - t * 4,
     };
   }
 
@@ -598,8 +638,9 @@ class ObstacleDodge extends BaseGame {
     this.parkHold = 0;
     this.obstacles = [];
     this.coinItems = [];
-    this.spawn = this.level === 1 ? 1.2 : 0.75;
-    this.coinSpawn = this.level === 1 ? 1.4 : 0.9;
+    const settings = this.levelSettings();
+    this.spawn = settings.spawnMax;
+    this.coinSpawn = settings.coinMax;
   }
 
   chooseGender(gender) {
@@ -620,8 +661,8 @@ class ObstacleDodge extends BaseGame {
   }
 
   finishLevel() {
-    this.coins += this.level * 10;
-    if (this.level === 1) this.state = "levelComplete";
+    this.coins += 30; // [AI 평가] 학생안 "한 라운드 깨면 30코인"
+    if (this.level < this.maxLevel) this.state = "levelComplete";
     else this.state = "won";
   }
 
@@ -651,7 +692,7 @@ class ObstacleDodge extends BaseGame {
       const count = settings.obstacleCount;
       for (let i = 0; i < count; i += 1) {
         this.obstacles.push({
-          x: W + rand(40, this.level === 1 ? 260 : 190),
+          x: W + rand(40, this.level <= 2 ? 250 : 180),
           y: rand(190, 438),
           w: rand(settings.obstacleW[0], settings.obstacleW[1]),
           h: rand(settings.obstacleH[0], settings.obstacleH[1]),
@@ -782,7 +823,7 @@ class ObstacleDodge extends BaseGame {
   }
 
   getStats() {
-    return `레벨 ${this.level} · 코인 ${this.coins} · ${this.gender || "캐릭터 선택"} · ${this.carName}`;
+    return `레벨 ${this.level}/${this.maxLevel} · 코인 ${this.coins} · ${this.gender || "캐릭터 선택"} · ${this.carName}`;
   }
 
   drawCar(c) {
@@ -898,12 +939,12 @@ class ObstacleDodge extends BaseGame {
     drawGuidePanel(c, "현재 할 일", [
       this.state === "parking" ? "손가락으로 차를 주차칸 안에 밀기" : "손가락으로 차를 밀어 다가오는 차 피하기",
       this.state === "parking" ? "칸 안에서 잠깐 멈추면 통과" : "마우스/터치 또는 방향키가 손가락을 움직임",
-      this.level === 1 ? "1단계는 연습용이라 천천히 나옵니다" : "2단계는 차가 더 자주 나옵니다",
+      `레벨 ${this.level}/${this.maxLevel} · 오를수록 차가 빠르고 많아집니다`,
     ], 600, 20, 330, "#ffd166");
     drawSmallText(c, [
       "차가 스스로 움직이는 것이 아니라 손가락에 밀려 움직입니다.",
       "너무 세게 밀면 관성 때문에 미끄러집니다.",
-      "레벨2는 다가오는 차가 더 많이 나옵니다.",
+      "레벨이 오를수록 다가오는 차가 더 많아집니다.",
     ], 22, 64);
 
     if (this.state === "select") {
@@ -916,11 +957,11 @@ class ObstacleDodge extends BaseGame {
       this.addButton(c, 400, 382, 160, 44, "다시 시작", () => this.startLevel(this.level), "#ff756b");
     }
     if (this.state === "levelComplete") {
-      drawMessage(c, "Finish!", "잘했어요. 다음 레벨로 갑니다.", "#3be2c0");
-      this.addButton(c, 310, 382, 160, 44, "레벨2", () => this.startLevel(2), "#3be2c0");
-      this.addButton(c, 492, 382, 160, 44, "자동차 25코인", () => this.buyCar(), "#ffd166");
+      drawMessage(c, "Finish!", `레벨 ${this.level} 통과! 30코인 획득.`, "#3be2c0");
+      this.addButton(c, 300, 382, 176, 44, `레벨 ${this.level + 1} 시작`, () => this.startLevel(this.level + 1), "#3be2c0");
+      this.addButton(c, 498, 382, 158, 44, "자동차 25코인", () => this.buyCar(), "#ffd166");
     }
-    if (this.state === "won") drawMessage(c, "Finish!", "레벨2와 주차까지 성공했습니다.", "#3be2c0");
+    if (this.state === "won") drawMessage(c, "올 클리어!", `레벨 ${this.maxLevel}까지 모두 통과했습니다.`, "#3be2c0");
   }
 }
 
@@ -945,6 +986,8 @@ class TargetShooter extends BaseGame {
     this.target = { x: 646, y: 256, r: 58 };
     this.projectile = null;
     this.problem = null;
+    this.items = []; // 학생안: 적을 맞추면 아이템을 얻는다
+    this.itemPool = ["⭐ 별", "❤️ 하트", "🔑 열쇠", "💎 보석", "🍀 클로버"];
     this.feedback = "문제를 풀면 정확도와 발사력이 올라갑니다.";
   }
 
@@ -956,6 +999,7 @@ class TargetShooter extends BaseGame {
   }
 
   makeQuestion() {
+    // [AI 평가] 평면도형의 이동 퀴즈로 대포 성능을 올린다 — 단원 핵심 학습 목표라 유지.
     this.problem = transformQuestions[Math.floor(rand(0, transformQuestions.length))];
   }
 
@@ -992,7 +1036,9 @@ class TargetShooter extends BaseGame {
         const end = { x: this.projectile.tx, y: this.projectile.ty, r: 7 };
         if (circleHit(end, this.target)) {
           this.hits += 1;
-          this.feedback = "명중! 문제 풀이가 조준에 도움이 됐습니다.";
+          const item = this.itemPool[Math.floor(rand(0, this.itemPool.length))];
+          this.items.push(item); // 명중하면 아이템 획득(학생안)
+          this.feedback = `명중! ${item} 아이템을 얻었습니다.`;
         } else {
           this.feedback = "빗나갔습니다. 다음 문제를 풀어 정확도를 올리세요.";
         }
@@ -1032,7 +1078,7 @@ class TargetShooter extends BaseGame {
   }
 
   getStats() {
-    return `명중 ${this.hits}/5 · 발사 ${this.shots}/9 · 정확도 ${this.accuracy}% · 발사력 ${this.power}%`;
+    return `명중 ${this.hits}/5 · 아이템 ${this.items.length}개 · 정확도 ${this.accuracy}% · 발사력 ${this.power}%`;
   }
 
   drawQuestion(c) {
@@ -1069,20 +1115,48 @@ class TargetShooter extends BaseGame {
     c.lineTo(W, 536);
     c.stroke();
 
+    // [AI 평가] 학생이 그린 "포차(트럭형 대포)" 모양으로 리디자인.
+    const baseX = 120;
+    const baseY = 512;
     c.save();
-    c.translate(148, 502);
-    c.fillStyle = "#3be2c0";
-    c.beginPath();
-    c.moveTo(0, -38);
-    c.lineTo(76, -12);
-    c.lineTo(0, 14);
-    c.closePath();
+    c.fillStyle = "#101114"; // 바퀴
+    for (const wx of [baseX + 14, baseX + 60]) {
+      c.beginPath();
+      c.arc(wx, baseY + 16, 12, 0, Math.PI * 2);
+      c.fill();
+    }
+    c.fillStyle = "#6b7280";
+    for (const wx of [baseX + 14, baseX + 60]) {
+      c.beginPath();
+      c.arc(wx, baseY + 16, 5, 0, Math.PI * 2);
+      c.fill();
+    }
+    c.fillStyle = "#3be2c0"; // 트럭 몸체
+    roundRect(c, baseX, baseY - 14, 80, 26, 6);
     c.fill();
-    c.fillStyle = "#f7efe1";
-    c.beginPath();
-    c.arc(-6, 18, 28, 0, Math.PI * 2);
+    roundRect(c, baseX + 54, baseY - 30, 26, 18, 4); // 운전석
     c.fill();
+    c.fillStyle = "#101114";
+    c.fillRect(baseX + 60, baseY - 26, 14, 10); // 창문
     c.restore();
+
+    // 포신: 받침점에서 조준점(조준경)을 향해 회전
+    const pivotX = baseX + 30;
+    const pivotY = baseY - 16;
+    const ang = Math.atan2(this.crosshair.y - pivotY, this.crosshair.x - pivotX);
+    c.save();
+    c.translate(pivotX, pivotY);
+    c.rotate(ang);
+    c.fillStyle = "#ffd166";
+    roundRect(c, 0, -7, 60, 14, 4);
+    c.fill();
+    c.fillStyle = "#5b6066";
+    c.fillRect(56, -8, 8, 16); // 포구
+    c.restore();
+    c.fillStyle = "#2aa890";
+    c.beginPath();
+    c.arc(pivotX, pivotY, 12, 0, Math.PI * 2); // 포탑 받침
+    c.fill();
 
     c.save();
     c.translate(this.target.x, this.target.y);
@@ -1135,13 +1209,19 @@ class TargetShooter extends BaseGame {
       "5번 맞히면 성공, 9번 쏘면 종료",
     ], 600, 20, 330, "#ff756b");
     drawSmallText(c, [this.feedback, "방향키로 조준경 이동, Space 또는 클릭으로 발사"], 22, 64);
+    if (this.items.length) {
+      // 획득한 아이템을 우측 하단에 늘어놓기
+      c.fillStyle = "rgba(247,239,225,.85)";
+      c.font = "700 16px system-ui, sans-serif";
+      c.fillText(`획득 아이템: ${this.items.slice(-5).join("  ")}`, 470, 568);
+    }
     if (this.state === "ready") {
       drawMessage(c, "적을 맞춰라", "문제를 풀어 대포 성능을 올린 뒤 조준합니다.");
       this.addButton(c, 404, 382, 152, 44, "시작하기", () => this.start(), "#3be2c0");
     }
     if (this.state === "question") this.drawQuestion(c);
     if (this.state === "aim") this.addButton(c, 780, 504, 118, 42, "발사", () => this.fire(), "#3be2c0");
-    if (this.state === "won") drawMessage(c, "파이팅!", "문제를 풀고 적을 모두 맞췄습니다.", "#3be2c0");
+    if (this.state === "won") drawMessage(c, "파이팅!", `적을 모두 맞추고 아이템 ${this.items.length}개를 얻었습니다.`, "#3be2c0");
     if (this.state === "lost") drawMessage(c, "아쉬워요", "문제를 더 풀어 정확도를 높여 보세요.", "#ff756b");
   }
 }
@@ -1166,6 +1246,14 @@ class HouseBuilder extends BaseGame {
     this.step = 0;
     this.hint = "1. 재료 선택 → 2. 회전 맞추기 → 3. 노란 위치 클릭";
     this.specialUsed = false;
+    // [AI 평가] 학생안의 "럭키박스(확률 10%·30%·60%)"는 초등 대상 사행성 우려가 있어
+    // 그대로 넣지 않았다. 대신 단계를 끝낼 때마다 5P를 확정 지급(노력 = 보상)하고,
+    // 모은 포인트로 집 디테일을 사서 완성도를 올리는 방식으로 바꿨다.
+    this.details = [
+      { key: "chimney", label: "굴뚝", cost: 15, bought: false },
+      { key: "garden", label: "정원", cost: 15, bought: false },
+      { key: "fence", label: "울타리", cost: 10, bought: false },
+    ];
     this.tasks = [
       { x: 230, y: 346, w: 34, h: 118, piece: "support", rot: 0, label: "왼쪽 지지대" },
       { x: 450, y: 346, w: 34, h: 118, piece: "support", rot: 0, label: "오른쪽 지지대" },
@@ -1212,6 +1300,53 @@ class HouseBuilder extends BaseGame {
     this.specialUsed = true;
     this.stability = 3;
     this.placeCurrent(true);
+  }
+
+  buyDetail(key) {
+    // 모은 포인트로 집 디테일 구매 (학생안: "번 포인트로 집에 디테일을 올린다")
+    const detail = this.details.find((d) => d.key === key);
+    if (!detail || detail.bought || this.points < detail.cost) return;
+    this.points -= detail.cost;
+    detail.bought = true;
+    this.hint = `${detail.label}을(를) 추가했어요!`;
+  }
+
+  hasDetail(key) {
+    return this.details.find((d) => d.key === key)?.bought;
+  }
+
+  drawDetails(c) {
+    if (this.hasDetail("chimney")) {
+      c.fillStyle = "#8a5a3c"; // 굴뚝
+      c.fillRect(392, 96, 26, 52);
+      c.fillStyle = "#5b6066";
+      c.fillRect(388, 90, 34, 10);
+    }
+    if (this.hasDetail("garden")) {
+      c.fillStyle = "#3f7d4a"; // 정원
+      roundRect(c, 190, 470, 90, 18, 6);
+      c.fill();
+      for (let i = 0; i < 3; i += 1) {
+        c.fillStyle = ["#ff8fa3", "#ffe066", "#c79bff"][i];
+        c.beginPath();
+        c.arc(208 + i * 28, 470, 6, 0, Math.PI * 2);
+        c.fill();
+      }
+    }
+    if (this.hasDetail("fence")) {
+      c.strokeStyle = "#caa472"; // 울타리
+      c.lineWidth = 4;
+      for (let x = 300; x <= 540; x += 28) {
+        c.beginPath();
+        c.moveTo(x, 482);
+        c.lineTo(x, 458);
+        c.stroke();
+      }
+      c.beginPath();
+      c.moveTo(300, 466);
+      c.lineTo(540, 466);
+      c.stroke();
+    }
   }
 
   pieceLabel(piece) {
@@ -1451,6 +1586,7 @@ class HouseBuilder extends BaseGame {
 
     for (const task of this.tasks) this.drawPiece(c, task.piece, task.x, task.y, task.w, task.h, task.rot, true);
     for (const task of this.placed) this.drawPiece(c, task.piece, task.x, task.y, task.w, task.h, task.rot, false);
+    this.drawDetails(c);
     const task = this.currentTask();
     if (task && this.state === "playing") {
       this.drawPlacementGuide(c, task);
@@ -1501,7 +1637,14 @@ class HouseBuilder extends BaseGame {
       drawMessage(c, "집짓기 게임", "시작하기를 누르면 재료를 돌려 집을 짓습니다.", "#ffd166");
       this.addButton(c, 404, 382, 152, 44, "시작하기", () => this.start(), "#3be2c0");
     }
-    if (this.state === "won") drawMessage(c, "멋져요!", "집을 튼튼하게 완성했습니다.", "#3be2c0");
+    if (this.state === "won") {
+      drawMessage(c, "멋져요!", `집 완성! 남은 ${this.points}P로 디테일을 꾸며 보세요.`, "#3be2c0");
+      this.details.forEach((d, i) => {
+        const label = d.bought ? `${d.label} ✓` : `${d.label} ${d.cost}P`;
+        const accent = d.bought ? "#3be2c0" : this.points >= d.cost ? "#ffd166" : "rgba(255,255,255,.3)";
+        this.addButton(c, 286 + i * 132, 392, 120, 40, label, () => this.buyDetail(d.key), accent);
+      });
+    }
     if (this.state === "fail") {
       drawMessage(c, "앗, 위태로워요!", "재료와 회전 각도를 다시 맞춰 주세요.", "#ff756b");
       this.addButton(c, 404, 382, 152, 44, "다시 짓기", () => this.reset(), "#ff756b");
