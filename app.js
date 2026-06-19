@@ -1513,9 +1513,18 @@ class BulletDefense extends BaseGame {
   constructor() {
     super(
       "총알을 피해라",
-      "총알이 날아오면 평면도형의 이동 문제를 풀고, 정답이면 방패로 막습니다. 틀리면 총알을 맞고 목숨이 줄어듭니다.",
+      "총구에서 총알이 날아오면 방향키(↑↓←→)나 화면 방향 버튼으로 직접 피하세요. 정해진 수만큼 피하면 성공입니다.",
       "총알을 피해라.pdf",
     );
+    // 플레이 영역(테두리 안)
+    this.area = { x: 56, y: 126, w: 848, h: 404 };
+    // 화면 방향 버튼(터치/클릭용 십자 패드)
+    this.pad = {
+      up: { x: 130, y: 538, w: 50, h: 26 },
+      left: { x: 76, y: 568, w: 50, h: 26 },
+      down: { x: 130, y: 568, w: 50, h: 26 },
+      right: { x: 184, y: 568, w: 50, h: 26 },
+    };
     this.reset();
   }
 
@@ -1523,95 +1532,166 @@ class BulletDefense extends BaseGame {
     super.reset();
     this.state = "ready";
     this.lives = 3;
-    this.blocked = 0;
-    this.goal = 8;
-    this.bullet = null;
-    this.spawnTimer = 0.8;
-    this.problem = null;
-    this.shieldTimer = 0;
+    this.dodged = 0;
+    this.goal = 20;
+    this.bullets = [];
+    this.spawnTimer = 1.2;
+    this.invuln = 0;
     this.flash = "";
+    this.flashTimer = 0;
+    this.player = { x: 200, y: 360, r: 20 };
+    this.gun = { x: 838, y: 360 };
   }
 
   start() {
     if (this.state === "ready" || this.state === "won" || this.state === "lost") {
+      this.reset();
       this.state = "playing";
-      this.spawnTimer = 0.6;
-      this.bullet = null;
-      this.problem = null;
+      this.spawnTimer = 0.8;
     }
+  }
+
+  // 난이도: 시간이 지날수록 총알이 빨라지고 자주 나옴
+  difficulty() {
+    const t = clamp(this.time / 45, 0, 1);
+    return {
+      speed: 250 + t * 150,
+      interval: 1.1 - t * 0.6,
+      lead: 0.55 + t * 0.2,
+    };
   }
 
   spawnBullet() {
-    this.bullet = { x: 790, y: rand(250, 410), r: 9, vx: -260 };
+    const d = this.difficulty();
+    const aimY = (this.player.y - this.gun.y) * d.lead + rand(-50, 50);
+    const vy = clamp(aimY, -170, 170);
+    this.bullets.push({ x: this.gun.x - 26, y: this.gun.y, r: 9, vx: -d.speed, vy });
   }
 
-  askQuestion() {
-    this.problem = transformQuestions[Math.floor(rand(0, transformQuestions.length))];
-    this.state = "question";
-  }
-
-  answer(index) {
-    const correct = index === this.problem.answer;
-    if (correct) {
-      this.blocked += 1;
-      this.shieldTimer = 0.8;
-      this.flash = "막았다!";
-    } else {
-      this.lives -= 1;
-      this.flash = "맞았다!";
+  // 키보드 + 화면 패드 + 터치 드래그로 이동 벡터 계산
+  moveVector() {
+    let mx = 0;
+    let my = 0;
+    if (keys.has("arrowleft") || keys.has("a")) mx -= 1;
+    if (keys.has("arrowright") || keys.has("d")) mx += 1;
+    if (keys.has("arrowup") || keys.has("w")) my -= 1;
+    if (keys.has("arrowdown") || keys.has("s")) my += 1;
+    if (pointer.down) {
+      if (hitRect(pointer, this.pad.left)) mx -= 1;
+      else if (hitRect(pointer, this.pad.right)) mx += 1;
+      else if (hitRect(pointer, this.pad.up)) my -= 1;
+      else if (hitRect(pointer, this.pad.down)) my += 1;
     }
-    this.bullet = null;
-    this.problem = null;
-    if (this.blocked >= this.goal) this.state = "won";
-    else if (this.lives <= 0) this.state = "lost";
-    else {
-      this.state = "playing";
-      this.spawnTimer = 0.9;
-    }
+    return { mx, my };
   }
 
   update(dt) {
     this.time += dt;
-    this.shieldTimer = Math.max(0, this.shieldTimer - dt);
+    this.invuln = Math.max(0, this.invuln - dt);
+    this.flashTimer = Math.max(0, this.flashTimer - dt);
+    if (this.flashTimer <= 0) this.flash = "";
     if (this.state !== "playing") return;
-    this.spawnTimer -= dt;
-    if (!this.bullet && this.spawnTimer <= 0) this.spawnBullet();
-    if (this.bullet) {
-      this.bullet.x += this.bullet.vx * dt;
-      if (this.bullet.x <= 282) this.askQuestion();
-    }
-  }
 
-  onKeyDown(key) {
-    if (this.state === "question" && ["1", "2", "3"].includes(key)) this.answer(Number(key) - 1);
+    // 총구는 플레이어를 천천히 따라본다(겨냥하는 느낌)
+    this.gun.y += (clamp(this.player.y, 200, 480) - this.gun.y) * Math.min(1, dt * 2.2);
+
+    const { mx, my } = this.moveVector();
+    const speed = 330;
+    this.player.x += mx * speed * dt;
+    this.player.y += my * speed * dt;
+    // 터치로 영역 안을 누르면 손가락 쪽으로 이동(패드 영역 제외)
+    if (pointer.down && pointer.y < this.area.y + this.area.h && !mx && !my) {
+      this.player.x += (pointer.x - this.player.x) * Math.min(1, dt * 9);
+      this.player.y += (pointer.y - this.player.y) * Math.min(1, dt * 9);
+    }
+    this.player.x = clamp(this.player.x, 84, 600);
+    this.player.y = clamp(this.player.y, 186, 486);
+
+    const d = this.difficulty();
+    this.spawnTimer -= dt;
+    if (this.spawnTimer <= 0) {
+      this.spawnBullet();
+      this.spawnTimer = rand(d.interval * 0.7, d.interval * 1.2);
+    }
+
+    for (const b of this.bullets) {
+      b.x += b.vx * dt;
+      b.y += b.vy * dt;
+      if (b.y < this.area.y + 12 || b.y > this.area.y + this.area.h - 12) b.vy *= -1;
+    }
+
+    // 충돌 / 회피 판정
+    const remaining = [];
+    for (const b of this.bullets) {
+      if (this.invuln <= 0 && circleHit({ x: this.player.x, y: this.player.y, r: this.player.r }, b)) {
+        this.lives -= 1;
+        this.invuln = 1.1;
+        this.flash = "맞았다!";
+        this.flashTimer = 0.7;
+        continue; // 맞은 총알은 사라짐
+      }
+      if (b.x <= this.area.x - 20) {
+        this.dodged += 1; // 화면 왼쪽으로 지나가면 피한 것
+        continue;
+      }
+      remaining.push(b);
+    }
+    this.bullets = remaining;
+
+    if (this.lives <= 0) this.state = "lost";
+    else if (this.dodged >= this.goal) this.state = "won";
   }
 
   getStats() {
-    return `방어 ${this.blocked}/${this.goal} · 목숨 ${this.lives}/3`;
+    return `피한 총알 ${this.dodged}/${this.goal} · 목숨 ${this.lives}/3`;
   }
 
-  drawQuestion(c) {
+  drawGun(c) {
     c.save();
-    c.fillStyle = "rgba(16,17,20,.9)";
-    roundRect(c, 178, 132, 604, 314, 8);
+    c.translate(this.gun.x, this.gun.y);
+    // 포신(왼쪽을 향한 총구)
+    c.fillStyle = "#5b6066";
+    roundRect(c, -56, -12, 52, 24, 5);
     c.fill();
-    c.strokeStyle = "#ffd166";
-    c.lineWidth = 2;
+    c.fillStyle = "#3a3e44";
+    c.fillRect(-58, -7, 8, 14); // 총구 입구
+    // 몸체
+    c.fillStyle = "#ff756b";
+    c.beginPath();
+    c.arc(0, 0, 40, 0, Math.PI * 2);
+    c.fill();
+    c.fillStyle = "#101114";
+    c.beginPath();
+    c.arc(-12, -8, 6, 0, Math.PI * 2);
+    c.arc(12, -8, 6, 0, Math.PI * 2);
+    c.fill();
+    c.strokeStyle = "#101114";
+    c.lineWidth = 4;
+    c.beginPath();
+    c.arc(0, 12, 14, 0, Math.PI);
     c.stroke();
-    c.textAlign = "center";
-    c.fillStyle = "#ffd166";
-    c.font = "900 28px system-ui, sans-serif";
-    c.fillText("총알이 날아옵니다", W / 2, 184);
-    c.fillStyle = "#f7efe1";
-    c.font = "750 20px system-ui, sans-serif";
-    c.fillText(this.problem.prompt, W / 2, 224);
-    c.fillStyle = "rgba(247,239,225,.72)";
-    c.font = "650 15px system-ui, sans-serif";
-    c.fillText("정답이면 방패가 나오고, 틀리면 총알을 맞습니다.", W / 2, 254);
     c.restore();
-    this.problem.options.forEach((option, i) => {
-      this.addButton(c, 292, 292 + i * 48, 376, 38, `${i + 1}. ${option}`, () => this.answer(i), "#ffd166");
-    });
+  }
+
+  drawPad(c) {
+    const arrows = { up: "▲", left: "◀", down: "▼", right: "▶" };
+    for (const dir of Object.keys(this.pad)) {
+      const b = this.pad[dir];
+      const active = pointer.down && hitRect(pointer, b);
+      c.save();
+      roundRect(c, b.x, b.y, b.w, b.h, 6);
+      c.fillStyle = active ? "rgba(59,226,192,.4)" : "rgba(16,17,20,.7)";
+      c.fill();
+      c.strokeStyle = "#3be2c0";
+      c.lineWidth = 2;
+      c.stroke();
+      c.fillStyle = "#f7efe1";
+      c.textAlign = "center";
+      c.textBaseline = "middle";
+      c.font = "900 14px system-ui, sans-serif";
+      c.fillText(arrows[dir], b.x + b.w / 2, b.y + b.h / 2 + 1);
+      c.restore();
+    }
   }
 
   draw(c) {
@@ -1619,65 +1699,54 @@ class BulletDefense extends BaseGame {
     drawBackplate(c, "#17151a");
     drawStars(c, this.time, 30);
     c.fillStyle = "rgba(247,239,225,.06)";
-    roundRect(c, 56, 126, 848, 404, 8);
+    roundRect(c, this.area.x, this.area.y, this.area.w, this.area.h, 8);
     c.fill();
     c.strokeStyle = "rgba(255,255,255,.12)";
     c.stroke();
 
-    drawPlayer(c, 214, 432, "#3be2c0");
-    c.save();
-    c.translate(760, 318);
-    c.fillStyle = "#ff756b";
-    c.beginPath();
-    c.arc(0, 0, 52, 0, Math.PI * 2);
-    c.fill();
-    c.fillStyle = "#101114";
-    c.beginPath();
-    c.arc(-16, -10, 7, 0, Math.PI * 2);
-    c.arc(16, -10, 7, 0, Math.PI * 2);
-    c.fill();
-    c.strokeStyle = "#101114";
-    c.lineWidth = 5;
-    c.beginPath();
-    c.arc(0, 16, 20, 0, Math.PI);
-    c.stroke();
-    c.restore();
-
-    if (this.bullet) {
+    for (const b of this.bullets) {
       c.fillStyle = "#ffd166";
       c.beginPath();
-      c.arc(this.bullet.x, this.bullet.y, this.bullet.r, 0, Math.PI * 2);
+      c.arc(b.x, b.y, b.r, 0, Math.PI * 2);
       c.fill();
       c.strokeStyle = "rgba(255,209,102,.32)";
       c.lineWidth = 6;
       c.stroke();
     }
-    if (this.shieldTimer > 0) {
-      c.strokeStyle = "#3be2c0";
-      c.lineWidth = 10;
-      c.beginPath();
-      c.arc(260, 392, 86, -1.1, 1.1);
-      c.stroke();
+
+    this.drawGun(c);
+    // 무적(피격 직후)일 때 깜빡임
+    if (!(this.invuln > 0 && Math.floor(this.time * 12) % 2 === 0)) {
+      drawPlayer(c, this.player.x, this.player.y, "#3be2c0");
     }
 
-    c.fillStyle = "#f7efe1";
-    c.font = "900 24px system-ui, sans-serif";
-    c.fillText(this.flash, 438, 162);
-    drawCapsule(c, 22, 20, "평면도형 이동 문제를 맞히면 방패가 나옵니다", "#ffd166");
+    if (this.flash) {
+      c.fillStyle = "#ff756b";
+      c.font = "900 24px system-ui, sans-serif";
+      c.textAlign = "center";
+      c.fillText(this.flash, this.player.x, this.player.y - 48);
+      c.textAlign = "left";
+    }
+
+    drawCapsule(c, 22, 20, "총알이 날아오면 방향키나 화면 버튼으로 피하세요", "#ffd166");
     drawGuidePanel(c, "현재 할 일", [
-      this.state === "question" ? "문제 정답을 골라 방패 만들기" : "총알이 가까워질 때까지 기다리기",
-      "정답: 방패로 막기",
-      "오답: 목숨 1개 감소",
+      "1. ↑↓←→ 방향키로 캐릭터 이동",
+      "2. 총구에서 나오는 총알 피하기",
+      `3. 총알 ${this.goal}개를 피하면 성공!`,
     ], 594, 20, 330, "#ffd166");
-    drawSmallText(c, ["총알이 가까워지면 문제가 뜹니다.", "목숨은 세 개입니다."], 22, 64);
+    drawSmallText(c, [
+      "총알에 맞으면 목숨이 하나 줄어듭니다.",
+      "터치 화면은 아래 방향 버튼이나 드래그로 움직일 수 있어요.",
+    ], 22, 64);
+
+    if (this.state === "playing" || this.state === "ready") this.drawPad(c);
 
     if (this.state === "ready") {
-      drawMessage(c, "총알을 피해라", "문제를 맞혀 방패로 총알을 막으세요.");
+      drawMessage(c, "총알을 피해라", "방향키로 움직여 날아오는 총알을 피하세요.");
       this.addButton(c, 404, 382, 152, 44, "시작하기", () => this.start(), "#3be2c0");
     }
-    if (this.state === "question") this.drawQuestion(c);
-    if (this.state === "won") drawMessage(c, "막는 것 성공", "총알을 모두 방패로 막았습니다.", "#3be2c0");
-    if (this.state === "lost") drawMessage(c, "맞는 것", "총알을 세 번 맞았습니다. 다시 도전하세요.", "#ff756b");
+    if (this.state === "won") drawMessage(c, "피하기 성공!", `총알 ${this.goal}개를 모두 피했습니다.`, "#3be2c0");
+    if (this.state === "lost") drawMessage(c, "맞았어요", "총알을 세 번 맞았습니다. 다시 도전하세요.", "#ff756b");
   }
 }
 
